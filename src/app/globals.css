@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Coral Reef Palette */
+  --color-kalanchoe: #A8C5B0;
+  --color-amazonite: #2B6B5E;
+  --color-poetry-pink: #EDAC96;
+  --color-grapefruit: #E8734A;
+  --color-cinnamon: #A97455;
+  --color-sand: #F5EDE6;
+  --color-driftwood: #3D3028;
+  --color-foam: #FDFAF7;
+  --color-deep-sea: #1A2E2A;
+  --color-moonlit-sand: #D4C5B9;
+
+  /* Semantic colors */
+  --color-background: var(--color-sand);
+  --color-foreground: var(--color-driftwood);
+
+  /* Typography */
+  --font-display: var(--font-playfair);
+  --font-body: var(--font-jakarta);
+
+  /* Warm shadows */
+  --shadow-warm: 0 4px 14px rgba(169, 116, 85, 0.10);
+  --shadow-warm-lg: 0 10px 30px rgba(169, 116, 85, 0.15);
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme inline {
+    --color-background: var(--color-deep-sea);
+    --color-foreground: var(--color-foam);
+  }
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body), sans-serif;
+}
