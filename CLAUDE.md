@@ -6,6 +6,7 @@ personalized meal options — to order via delivery deep links or cook from
 pantry staples. Phase 1 (MVP) is the personalization engine.
 
 > Implementation plan: `~/.claude/plans/shiny-purring-phoenix.md`
+> Product requirements: `ImHungry_PRD.md` · Design & user flows: `ImHungry_Design.md`
 
 ## Stack
 

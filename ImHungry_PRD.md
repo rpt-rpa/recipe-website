@@ -3,7 +3,8 @@
 **Version:** 1.0  
 **Date:** May 2026  
 **Stack:** Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Supabase · n8n  
-**Repo:** `recipe-sharing` (formerly RecipeVault scaffold)
+**Repo:** `recipe-sharing` (formerly RecipeVault scaffold)  
+**Companion doc:** `ImHungry_Design.md` — full design language + screen-by-screen user flows
 
 ---
 
@@ -14,6 +15,14 @@
 The core product is a **personalization engine**: a no-form decision wizard with three input modes (conversational text, Surprise Me, This-or-That taps) that feeds a rule-based recommendation engine. Every choice, reaction, and dismissal teaches the app what the user actually likes — recall-first during cold start, precision-led as confidence grows.
 
 Phase 1 (MVP — **shipped**) covers auth, first-run setup, the decision wizard, live n8n recommendations, feedback & learning, history, and profile.
+
+### 1.1 The Core Loop
+
+1. **Context capture** — user opens the app and picks an input mode; time of day and day of week are captured silently
+2. **Recommendation engine** — real-time context + behavioral history → 3–5 ranked options via n8n
+3. **Mixed-format results** — each option is either a dish to order via a delivery deep link, or a recipe under X minutes from likely pantry staples
+4. **Feedback** — user chooses one, reacts (❤️ / 🙂 / 😐 / 👎), or skips → explicit + implicit signals logged → engine sharpens (recall first, then precision)
+5. **Loop** — over time the app learns context-specific taste ("Tuesday ~6:30pm you want quick Thai") and reflects it back on the Profile tab
 
 ---
 
@@ -61,6 +70,8 @@ Food decisions are impulsive, emotional, and frequent — yet most people spend 
 
 ## 5. Brand & Design System
 
+> Summary only. Full design language, component patterns, and screen-by-screen user flows live in **`ImHungry_Design.md`**.
+
 ### 5.1 Brand Identity
 
 **Name:** i'm hungry (lowercase wordmark, Fraunces display font)  
@@ -88,13 +99,9 @@ Defined in `src/app/globals.css` under `@theme inline`. All Tailwind utility cla
 | Body / UI | **Inter** | Clean, geometric — `var(--font-inter)` |
 | Labels | Inter uppercase | Letter-spaced, uppercase |
 
-### 5.4 Motifs & Style
+### 5.4 Motifs & Style (summary)
 
-- **Rounded everything:** generous border-radius on cards, buttons, chips (pill/lozenge shapes)
-- **Produce iconography:** 🍳 🛵 ✨ 🔀 💬 used as functional icons within the decision flow
-- **Confident color blocking:** lime/orange/raspberry as full-bleed section fills on the mode picker
-- **Single-column mobile-first:** max-width 448px centered, generous padding
-- **Touch targets:** minimum 44px on all interactive elements (enforced globally in CSS)
+Rounded everything (pill/lozenge); emoji as functional icons (🍳 🛵 ✨ 🔀 💬); confident lime/orange/raspberry color blocking; single-column mobile-first (`max-w-md`, ~448px); ≥44px touch targets enforced globally. See `ImHungry_Design.md` §5 for the full component pattern library.
 
 ---
 
@@ -206,6 +213,25 @@ Every mode emits `ModeOutput` → `normalizeIntent()` → canonical `Intent` →
 
 **Mode memory:** `user_profiles.last_input_mode` — wizard reopens straight into last-used mode.
 
+> Screen-by-screen UX for each mode (and the wizard host) is in `ImHungry_Design.md` §7.3.
+
+### 8.1 Context Signals
+
+The engine combines signals captured three different ways — silent, asked-once, and learned. Allergies/restrictions are the only hard-filter signals; everything else is soft.
+
+| Signal | How captured | Storage |
+|--------|-------------|---------|
+| Time of day / day of week | Auto (`new Date()`) | `food_sessions.hour_of_day` / `day_of_week` |
+| Hunger level | Mode input (slider / tap), nullable | `food_sessions.hunger_level` |
+| Time available | Mode input (15 / 30 / 60+ min), nullable | `food_sessions.time_available_mins` |
+| Budget sensitivity | Profile default + optional per-session override | `user_profiles.budget_range` / `food_sessions.budget_override` |
+| Cravings | Parsed from mode input (free-form tags) | `food_sessions.cravings` |
+| Recent meals | Derived from `feedback` (chose, last ~3 days) | sent as `recently_eaten` |
+| Dietary restrictions / allergies | Asked once at setup (chips) — **hard filter** | `user_profiles` |
+| Preferred cuisines / dislikes | **Learned** from feedback, never asked upfront | `user_profiles` |
+| Pantry staples | Optional at setup (chips) | `user_profiles.pantry_staples` |
+| Location | Phase 2 (browser geolocation) | — |
+
 ---
 
 ## 9. Recommendation Engine (n8n)
@@ -213,7 +239,8 @@ Every mode emits `ModeOutput` → `normalizeIntent()` → canonical `Intent` →
 **Workflow:** n8n cloud instance (`imhungry` workflow, id `ScDcVTDSW1KXHtUv`)  
 **URL:** `https://lightningvision.app.n8n.cloud/webhook/06eb28a9-0438-4ab0-b82a-b9d9e81e8f04`  
 **Method:** POST  
-**Pattern:** Webhook → Code (engine) → Respond to Webhook
+**Pattern:** Webhook → Code (engine) → Respond to Webhook  
+**Recommendation mix:** returns up to 5 ranked options, biased toward ~2–3 delivery + ~1–2 recipe so every session bridges order-out and cook-at-home (Phase 1 catalog is static; Phase 2+ swaps in live delivery/recipe APIs).
 
 ### 9.1 Enriched Request Payload
 
@@ -234,7 +261,7 @@ The client gathers context via RLS-safe reads and sends:
 ### 9.2 Scoring Rules (in `docs/n8n/engine.js`)
 
 1. **Hard filter:** allergy + dietary restrictions — never overridden
-2. **Rating boost:** `resolveRating()` — first-party > weighted external blend
+2. **Rating boost:** `resolveRating()` — first-party > weighted external blend (external = cached Google Places + Yelp Fusion)
 3. **Speed weight:** hunger ≥ 4 or time ≤ 15 min → fast dishes ranked up
 4. **Cravings boost:** cuisine / dish name matches get +1.5
 5. **Format bias:** cook/order preference
@@ -266,17 +293,21 @@ The client gathers context via RLS-safe reads and sends:
 
 ## 10. Ratings Architecture
 
-Single resolver `resolveRating(dishKey)` in `src/lib/ratings.ts`. All reads go through it — no component reads raw rating columns.
+Single resolver `resolveRating(dishKey)` in `src/lib/ratings.ts`. All reads go through it — no component reads raw rating columns. Ratings are a source-tagged, `scale`-aware layer so the model can be retuned or replaced without touching cards or scoring.
 
-| Source | Precedence | When present |
-|--------|-----------|-------------|
-| `first_party` | Highest — always wins | After user submits post-meal star rating |
-| `google` | External fallback | Engine catalog seeds |
-| `yelp` | External fallback | Engine catalog seeds |
+| Source | Precedence | How it's populated |
+|--------|-----------|--------------------|
+| `first_party` | Highest — always wins once it clears `first_party_min_votes` | Aggregated from post-meal star ratings (running-average upsert) |
+| `google` | External fallback | **Google Places API** (`rating` + `user_ratings_total`) → cached `google` row keyed by `dish_key` |
+| `yelp` | External fallback | **Yelp Fusion API** (`rating` + `review_count`) → cached `yelp` row |
 
-**RATING_CONFIG** holds blend weights and min_votes threshold. Editable without touching cards or the engine.
+**External fetch & cache:** n8n nodes (or a Supabase Edge Function) call the Google Places + Yelp Fusion APIs, normalize each response into the `ratings` schema (`score`, `scale`, `votes`), store the full response in `raw_payload` for later re-interpretation, and refresh periodically. `resolveRating()` blends external sources weighted by `RATING_CONFIG.external_weights × votes`; a `first_party` row overrides the blend outright once present.
+
+**RATING_CONFIG** holds the external blend weights + `first_party_min_votes`. Editable without touching cards or the engine.
 
 **Card badge:** `"★ community N.N"` (raspberry) when `source === first_party`, otherwise `"★ N.N"` (neutral).
+
+> **Implementation status:** the resolver, precedence, `RATING_CONFIG`, ratings schema, and badge are shipped. The live Google/Yelp fetch nodes read `GOOGLE_PLACES_API_KEY` / `YELP_API_KEY` (§13); until those keys are provisioned the engine's catalog seed ratings stand in as the external source. Switching the live feed on requires no card or scoring changes — only populated `google`/`yelp` rows.
 
 ---
 
@@ -302,6 +333,18 @@ Single resolver `resolveRating(dishKey)` in `src/lib/ratings.ts`. All reads go t
 - Reaction "not_it" → add to `disliked_foods`
 - Post-meal rating → running-average upsert in `ratings` table (`first_party`)
 - Engine's repeat penalty consumes `recently_eaten` (feedback joins on chose outcome)
+
+### 11.4 Explore → Exploit (cold-start curve)
+
+We optimize for **recall early, precision later** — a single `exploration_rate` (in `LEARNING_CONFIG`) decays as `session_count` rises.
+
+| Stage | Behavior | Mechanism |
+|-------|----------|-----------|
+| **Cold start** (few sessions) | Explore widely — diversify cuisines/formats/price to learn fast | High `exploration_rate`; ≥1 wildcard slot reserved while above `wildcard_slot_threshold` |
+| **Warm** (data accumulating) | Mostly confident picks + one wildcard to avoid filter bubbles | `exploration_rate` decaying via `decay_per_session` |
+| **Mature** | Precision-led, narrow high-confidence recs | `exploration_rate` floored at `min_exploration_rate` |
+
+All learning math lives in `LEARNING_CONFIG` + the n8n engine — retunable without touching the rest of the app.
 
 ---
 
@@ -333,6 +376,13 @@ NEXT_PUBLIC_N8N_WEBHOOK_URL=https://lightningvision.app.n8n.cloud/webhook/06eb28
 NEXT_PUBLIC_INTENT_PARSE_URL=<optional: Claude/n8n text parsing endpoint — falls back to local heuristic>
 ```
 
+**Ratings API keys (server-side — set in the n8n workflow / Edge Function env, never exposed to the client):**
+
+```
+GOOGLE_PLACES_API_KEY=<Google Cloud → Places API>
+YELP_API_KEY=<Yelp Fusion → API key>
+```
+
 ---
 
 ## 14. Commands
@@ -360,3 +410,27 @@ npm run lint    # eslint
 - [x] History: sessions appear in correct order with mode icon, dish, stars
 - [x] Profile: shows allergies, restrictions, learned prefs, pantry, budget
 - [x] RLS: User A cannot read User B's food_sessions
+
+---
+
+## 16. Phase 2+ Architecture Hooks (built into Phase 1)
+
+Phase 1 was designed so later phases require zero foundational rework. Each future capability already has a seam in the shipped schema/code:
+
+| Future capability | Phase 1 hook already in place |
+|-------------------|-------------------------------|
+| Real DoorDash/UberEats API (Phase 2) | `recommendations.deep_link` — swap static search URL for API-sourced URL |
+| Geolocation (Phase 2) | `food_sessions` can add `lat`/`lng` columns without migration pain |
+| Voice mode (Phase 3) | Just another adapter → `normalizeIntent()`; reuses the text intent parser. STT engine itself swappable (Web Speech → paid) |
+| Card-swipe mode (Phase 4) | Adapter emits the same `Intent`; only needs a dish-image dataset — no engine/schema change |
+| Camera pantry scan (Phase 5) | `pantry_staples` is a `text[]` — source-agnostic, whether typed or vision-parsed |
+| Recipe API (Phase 6) | `recommendations.recipe_steps` is JSONB — compatible with any structured recipe source |
+| Preference management (Phase 7) | `user_profiles.updated_at` set — settings screen updates the same row |
+| Smart learning (Phase 8) | n8n workflow → add a Claude API node for pattern analysis, no schema changes |
+| Push notifications (Phase 9) | PWA meta already shipped; manifest + service worker are additive |
+| Living Taste Profile (Phase 10) | `taste_profile.stats` is JSONB — add/restyle insights freely; incremental + nightly recompute already planned |
+| Rethinking input UX entirely | All modes resolve through `normalizeIntent()`; engine only consumes `Intent`. `input_mode`/`raw_input` logged to measure what converts |
+| Rethinking ratings entirely | `ratings` is source-tagged + `scale`-aware + stores `raw_payload`; everything reads via `resolveRating()` with weights in `RATING_CONFIG` |
+| Additional rating sources | Add a new `source` value + a fetch node; resolver picks it up automatically |
+| Tuning explore/exploit | `LEARNING_CONFIG` holds `exploration_rate` + decay; retune cold-start vs precision without code changes |
+| Richer feedback signals | `interaction_events.event_type` is open-ended — add new implicit signals without schema changes |
