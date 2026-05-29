@@ -1,40 +1,75 @@
 @import "tailwindcss";
 
+/*
+  I'm Hungry — brand design tokens (GrowCo-inspired)
+  Fresh, organic, playful, food-forward. Warm cream base with
+  confident lime / forest / orange / raspberry color blocking.
+*/
 @theme inline {
-  /* Coral Reef Palette */
-  --color-kalanchoe: #A8C5B0;
-  --color-amazonite: #2B6B5E;
-  --color-poetry-pink: #EDAC96;
-  --color-grapefruit: #E8734A;
-  --color-cinnamon: #A97455;
-  --color-sand: #F5EDE6;
-  --color-driftwood: #3D3028;
-  --color-foam: #FDFAF7;
-  --color-deep-sea: #1A2E2A;
-  --color-moonlit-sand: #D4C5B9;
+  /* Brand palette */
+  --color-lime: #c2d72e; /* primary brand blocks, highlights, fresh accents */
+  --color-forest: #33530e; /* headlines, primary text, logo on light bg */
+  --color-orange: #f2872e; /* secondary accent, energy, cook/delivery */
+  --color-raspberry: #c8265b; /* primary CTA, hot accents, hunger/urgency */
+  --color-cream: #fbf3e7; /* app background (warm off-white, never pure white) */
+  --color-card: #ffffff; /* card surfaces, contrast against cream */
 
-  /* Semantic colors */
-  --color-background: var(--color-sand);
-  --color-foreground: var(--color-driftwood);
+  /* Semantic aliases */
+  --color-background: var(--color-cream);
+  --color-foreground: var(--color-forest);
 
   /* Typography */
-  --font-display: var(--font-playfair);
-  --font-body: var(--font-jakarta);
+  --font-display: var(--font-fraunces); /* bold rounded display serif */
+  --font-ui: var(--font-inter); /* clean geometric sans for UI/body */
 
-  /* Warm shadows */
-  --shadow-warm: 0 4px 14px rgba(169, 116, 85, 0.10);
-  --shadow-warm-lg: 0 10px 30px rgba(169, 116, 85, 0.15);
+  /* Rounded everything — generous radii (pill/lozenge motif) */
+  --radius-pill: 999px;
+
+  /* Warm, soft shadows */
+  --shadow-soft: 0 4px 14px rgba(51, 83, 14, 0.08);
+  --shadow-soft-lg: 0 10px 30px rgba(51, 83, 14, 0.12);
 }
 
-@media (prefers-color-scheme: dark) {
-  @theme inline {
-    --color-background: var(--color-deep-sea);
-    --color-foreground: var(--color-foam);
-  }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
 }
 
 body {
   background: var(--color-background);
   color: var(--color-foreground);
-  font-family: var(--font-body), sans-serif;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Mobile-first: comfortable base size, prevent iOS tap zoom on inputs */
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* Min 44px touch targets on interactive elements */
+button,
+a,
+input,
+[role="button"] {
+  min-height: 44px;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
 }

@@ -1,23 +1,37 @@
-import type { Metadata } from "next";
-import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
   display: "swap",
+  axes: ["SOFT", "WONK", "opsz"],
 });
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "RecipeVault — Discover, Cook, Share",
+  title: "i'm hungry — what should I eat?",
   description:
-    "A visual-first, community-driven recipe sharing platform. Browse beautiful recipes, filter by dietary needs, and track what you've tried.",
+    "Beat food decision fatigue. i'm hungry learns your context and taste, then surfaces timely, personalized meals to order or cook. Fresh, fast & for you.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "i'm hungry",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#33530E",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -27,9 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${playfair.variable} ${jakarta.variable} antialiased`}
-      >
+      <body className={`${fraunces.variable} ${inter.variable}`}>
         {children}
       </body>
     </html>
