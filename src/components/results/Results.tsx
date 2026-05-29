@@ -1,13 +1,29 @@
 "use client";
 
 /**
- * Results view — renders the engine's ranked options as cards.
+ * Results view — ranked option cards with full feedback controls.
  *
- * Delivery cards deep-link to DoorDash/UberEats; recipe cards expand to steps.
- * Rating badges arrive in Task 5b; reactions / "I'm eating this" in Task 6.
+ * Per card: a quick reaction row (❤️🙂😐👎), an "I'm eating this!" choose
+ * button, a dismiss-with-reason affordance, plus the delivery deep links /
+ * recipe accordion. Explicit feedback + implicit events flow up via callbacks;
+ * the Wizard owns sessionId/userId and persists them.
  */
 import { useState } from "react";
 import type { Recommendation } from "@/lib/recommendations";
+import type { DismissReason, Reaction } from "@/lib/feedback";
+
+const REACTIONS: { key: Reaction; emoji: string; label: string }[] = [
+  { key: "love", emoji: "❤️", label: "love" },
+  { key: "good", emoji: "🙂", label: "good" },
+  { key: "meh", emoji: "😐", label: "meh" },
+  { key: "not_it", emoji: "👎", label: "not it" },
+];
+
+const DISMISS_REASONS: { key: DismissReason; label: string }[] = [
+  { key: "too_expensive", label: "too expensive" },
+  { key: "not_in_mood", label: "not in the mood" },
+  { key: "ate_recently", label: "ate recently" },
+];
 
 function deepLinks(dishName: string, provided: string | null) {
   const q = encodeURIComponent(dishName);
@@ -59,7 +75,97 @@ function RatingBadge({ rating }: { rating: Recommendation["rating"] }) {
   );
 }
 
-function DeliveryCard({ rec }: { rec: Recommendation }) {
+function FeedbackControls({
+  rec,
+  onChoose,
+  onReact,
+  onDismiss,
+}: {
+  rec: Recommendation;
+  onChoose: (rec: Recommendation) => void;
+  onReact: (rec: Recommendation, reaction: Reaction) => void;
+  onDismiss: (rec: Recommendation, reason: DismissReason | null) => void;
+}) {
+  const [reacted, setReacted] = useState<Reaction | null>(null);
+  const [showReasons, setShowReasons] = useState(false);
+
+  return (
+    <div className="mt-4 border-t border-forest/10 pt-3">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1.5">
+          {REACTIONS.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              aria-label={r.label}
+              aria-pressed={reacted === r.key}
+              onClick={() => {
+                setReacted(r.key);
+                onReact(rec, r.key);
+              }}
+              className={`flex h-9 w-9 items-center justify-center rounded-full text-base transition-all ${
+                reacted === r.key
+                  ? "bg-lime scale-110"
+                  : "bg-cream hover:bg-forest/5"
+              }`}
+            >
+              {r.emoji}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowReasons((s) => !s)}
+          className="text-xs font-medium text-forest/40 hover:text-forest/70"
+        >
+          Not this
+        </button>
+      </div>
+
+      {showReasons && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {DISMISS_REASONS.map((r) => (
+            <button
+              key={r.key}
+              type="button"
+              onClick={() => onDismiss(rec, r.key)}
+              className="rounded-full border border-forest/15 px-3 py-1.5 text-xs font-medium text-forest/70 hover:border-forest/40"
+            >
+              {r.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onDismiss(rec, null)}
+            className="rounded-full border border-forest/15 px-3 py-1.5 text-xs font-medium text-forest/50 hover:border-forest/40"
+          >
+            just dismiss
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => onChoose(rec)}
+        className="mt-3 w-full rounded-full bg-forest px-4 py-3 text-sm font-semibold text-cream transition-all hover:brightness-110 active:scale-[0.99]"
+      >
+        I&apos;m eating this! 🎉
+      </button>
+    </div>
+  );
+}
+
+type CardProps = {
+  rec: Recommendation;
+  onChoose: (rec: Recommendation) => void;
+  onReact: (rec: Recommendation, reaction: Reaction) => void;
+  onDismiss: (rec: Recommendation, reason: DismissReason | null) => void;
+  onTapOrder: (rec: Recommendation) => void;
+  onExpandRecipe: (rec: Recommendation) => void;
+};
+
+function DeliveryCard(props: CardProps) {
+  const { rec, onTapOrder } = props;
   const links = deepLinks(rec.dish_name, rec.deep_link);
   return (
     <article className="rounded-3xl bg-card p-5 shadow-soft">
@@ -84,6 +190,7 @@ function DeliveryCard({ rec }: { rec: Recommendation }) {
           href={links.doordash}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => onTapOrder(rec)}
           className="flex-1 rounded-full bg-raspberry px-4 py-3 text-center text-sm font-semibold text-cream transition-all hover:brightness-105 active:scale-[0.99]"
         >
           DoorDash
@@ -92,16 +199,19 @@ function DeliveryCard({ rec }: { rec: Recommendation }) {
           href={links.ubereats}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={() => onTapOrder(rec)}
           className="flex-1 rounded-full border-2 border-forest/15 px-4 py-3 text-center text-sm font-semibold text-forest transition-colors hover:border-forest/40"
         >
           UberEats
         </a>
       </div>
+      <FeedbackControls {...props} />
     </article>
   );
 }
 
-function RecipeCard({ rec }: { rec: Recommendation }) {
+function RecipeCard(props: CardProps) {
+  const { rec, onExpandRecipe } = props;
   const [open, setOpen] = useState(false);
   return (
     <article className="rounded-3xl bg-card p-5 shadow-soft">
@@ -123,7 +233,12 @@ function RecipeCard({ rec }: { rec: Recommendation }) {
       </div>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          setOpen((o) => {
+            if (!o) onExpandRecipe(rec);
+            return !o;
+          });
+        }}
         className="mt-4 w-full rounded-full bg-orange/15 px-4 py-3 text-sm font-semibold text-orange transition-colors hover:bg-orange/25"
       >
         {open ? "Hide recipe" : "View recipe"}
@@ -140,6 +255,7 @@ function RecipeCard({ rec }: { rec: Recommendation }) {
           ))}
         </ol>
       )}
+      <FeedbackControls {...props} />
     </article>
   );
 }
@@ -162,15 +278,46 @@ export default function Results({
   recommendations,
   loading,
   error,
+  onChoose,
+  onReact,
+  onDismiss,
+  onTapOrder,
+  onExpandRecipe,
   onSkipAll,
   onRetry,
 }: {
   recommendations: Recommendation[];
   loading: boolean;
   error: string | null;
+  onChoose: (rec: Recommendation) => void;
+  onReact: (rec: Recommendation, reaction: Reaction) => void;
+  onDismiss: (rec: Recommendation, reason: DismissReason | null) => void;
+  onTapOrder: (rec: Recommendation) => void;
+  onExpandRecipe: (rec: Recommendation) => void;
   onSkipAll: () => void;
   onRetry: () => void;
 }) {
+  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+
+  function handleDismiss(rec: Recommendation, reason: DismissReason | null) {
+    onDismiss(rec, reason);
+    const id = rec.id ?? String(rec.rank);
+    setDismissed((prev) => new Set(prev).add(id));
+  }
+
+  const visible = recommendations.filter(
+    (r) => !dismissed.has(r.id ?? String(r.rank)),
+  );
+
+  const cardProps = (rec: Recommendation): CardProps => ({
+    rec,
+    onChoose,
+    onReact,
+    onDismiss: handleDismiss,
+    onTapOrder,
+    onExpandRecipe,
+  });
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-8">
       <header className="mb-6">
@@ -203,11 +350,11 @@ export default function Results({
 
       {!loading && !error && (
         <div className="flex flex-col gap-4">
-          {recommendations.map((rec) =>
+          {visible.map((rec) =>
             rec.type === "delivery" ? (
-              <DeliveryCard key={rec.id ?? rec.rank} rec={rec} />
+              <DeliveryCard key={rec.id ?? rec.rank} {...cardProps(rec)} />
             ) : (
-              <RecipeCard key={rec.id ?? rec.rank} rec={rec} />
+              <RecipeCard key={rec.id ?? rec.rank} {...cardProps(rec)} />
             ),
           )}
 

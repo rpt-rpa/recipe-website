@@ -23,10 +23,21 @@ import {
   fetchRecommendations,
   type Recommendation,
 } from "@/lib/recommendations";
+import {
+  chooseRecommendation,
+  reactToRecommendation,
+  dismissRecommendation,
+  skipAll,
+  submitRating,
+  type DismissReason,
+  type Reaction,
+} from "@/lib/feedback";
+import { logEvent } from "@/lib/events";
 import ModeText from "@/components/modes/ModeText";
 import ModeSurprise from "@/components/modes/ModeSurprise";
 import ModeThisOrThat from "@/components/modes/ModeThisOrThat";
 import Results from "@/components/results/Results";
+import ConfirmScreen from "@/components/results/ConfirmScreen";
 import type { ModeProps } from "@/components/modes/types";
 
 type PickableMode = "text" | "surprise" | "this_or_that";
@@ -71,13 +82,15 @@ export default function Wizard({ userId }: { userId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Results phase.
-  const [phase, setPhase] = useState<"pick" | "results">("pick");
+  // Results / confirm phases.
+  const [phase, setPhase] = useState<"pick" | "results" | "confirm">("pick");
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [recsLoading, setRecsLoading] = useState(false);
   const [recsError, setRecsError] = useState<string | null>(null);
   const [lastIntent, setLastIntent] = useState<Intent | null>(null);
   const [lastSessionId, setLastSessionId] = useState<string | null>(null);
+  const [resultsShownAt, setResultsShownAt] = useState<number | null>(null);
+  const [chosen, setChosen] = useState<Recommendation | null>(null);
 
   // Open straight into the last-used mode, if any.
   useEffect(() => {
@@ -106,6 +119,7 @@ export default function Wizard({ userId }: { userId: string }) {
     try {
       const items = await fetchRecommendations(userId, sessionId, intent);
       setRecs(items);
+      setResultsShownAt(Date.now());
     } catch (err) {
       setRecsError(
         err instanceof Error ? err.message : "Could not load recommendations.",
@@ -132,16 +146,73 @@ export default function Wizard({ userId }: { userId: string }) {
     }
   }
 
-  async function handleSkipAll() {
-    // Log the "skipped all" outcome (full feedback module lands in Task 6).
-    if (lastSessionId) {
-      await supabase
-        .from("feedback")
-        .insert({ session_id: lastSessionId, outcome: "skipped_all" });
-    }
+  function backToPick() {
     setRecs([]);
     setRecsError(null);
+    setChosen(null);
     setPhase("pick");
+  }
+
+  async function handleSkipAll() {
+    if (lastSessionId) {
+      logEvent(lastSessionId, null, "reroll");
+      await skipAll(lastSessionId);
+    }
+    backToPick();
+  }
+
+  function handleChoose(rec: Recommendation) {
+    if (lastSessionId && rec.id) {
+      if (resultsShownAt) {
+        logEvent(
+          lastSessionId,
+          rec.id,
+          "time_to_decision",
+          Math.round((Date.now() - resultsShownAt) / 1000),
+        );
+      }
+      void chooseRecommendation(lastSessionId, rec.id);
+    }
+    setChosen(rec);
+    setPhase("confirm");
+  }
+
+  function handleReact(rec: Recommendation, reaction: Reaction) {
+    if (lastSessionId && rec.id) {
+      void reactToRecommendation(
+        lastSessionId,
+        rec.id,
+        reaction,
+        rec.cuisine,
+        userId,
+      );
+    }
+  }
+
+  function handleDismiss(rec: Recommendation, reason: DismissReason | null) {
+    if (lastSessionId && rec.id) {
+      void dismissRecommendation(lastSessionId, rec.id, reason);
+    }
+  }
+
+  function handleTapOrder(rec: Recommendation) {
+    if (lastSessionId && rec.id) logEvent(lastSessionId, rec.id, "tap_order");
+  }
+
+  function handleExpandRecipe(rec: Recommendation) {
+    if (lastSessionId && rec.id) logEvent(lastSessionId, rec.id, "expand_recipe");
+  }
+
+  function handleSubmitRating(rating: number) {
+    if (lastSessionId && chosen?.id) {
+      void submitRating(
+        lastSessionId,
+        chosen.id,
+        chosen.dish_name,
+        rating,
+        userId,
+      );
+    }
   }
 
   if (loadingMode) {
@@ -152,12 +223,27 @@ export default function Wizard({ userId }: { userId: string }) {
     );
   }
 
+  if (phase === "confirm" && chosen) {
+    return (
+      <ConfirmScreen
+        dishName={chosen.dish_name}
+        onSubmitRating={handleSubmitRating}
+        onDone={backToPick}
+      />
+    );
+  }
+
   if (phase === "results") {
     return (
       <Results
         recommendations={recs}
         loading={recsLoading}
         error={recsError}
+        onChoose={handleChoose}
+        onReact={handleReact}
+        onDismiss={handleDismiss}
+        onTapOrder={handleTapOrder}
+        onExpandRecipe={handleExpandRecipe}
         onSkipAll={handleSkipAll}
         onRetry={() => {
           if (lastSessionId && lastIntent) loadRecs(lastSessionId, lastIntent);
