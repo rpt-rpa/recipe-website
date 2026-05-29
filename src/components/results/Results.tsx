@@ -40,6 +40,25 @@ function CuisineTag({ cuisine }: { cuisine: string }) {
   );
 }
 
+function RatingBadge({ rating }: { rating: Recommendation["rating"] }) {
+  if (!rating) return null;
+  const firstParty = rating.source === "first_party";
+  return (
+    <span
+      title={
+        firstParty
+          ? `Community rated by ${rating.votes} ${rating.votes === 1 ? "person" : "people"}`
+          : `From ${rating.source}`
+      }
+      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+        firstParty ? "bg-raspberry text-cream" : "bg-forest/10 text-forest/70"
+      }`}
+    >
+      {firstParty ? "★ community" : "★"} {rating.score.toFixed(1)}
+    </span>
+  );
+}
+
 function DeliveryCard({ rec }: { rec: Recommendation }) {
   const links = deepLinks(rec.dish_name, rec.deep_link);
   return (
@@ -58,6 +77,7 @@ function DeliveryCard({ rec }: { rec: Recommendation }) {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <CuisineTag cuisine={rec.cuisine} />
         <TimeBadge mins={rec.est_time_mins} tone="lime" />
+        <RatingBadge rating={rec.rating} />
       </div>
       <div className="mt-4 flex gap-2">
         <a
@@ -99,6 +119,7 @@ function RecipeCard({ rec }: { rec: Recommendation }) {
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <CuisineTag cuisine={rec.cuisine} />
         <TimeBadge mins={rec.est_time_mins} tone="orange" />
+        <RatingBadge rating={rec.rating} />
       </div>
       <button
         type="button"

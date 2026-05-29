@@ -8,6 +8,7 @@
  */
 import { supabase } from "./supabase";
 import type { Intent } from "./intent";
+import { dishKey, resolveRatings } from "./ratings";
 
 export interface Rating {
   score: number;
@@ -158,7 +159,24 @@ export async function fetchRecommendations(
     (a, b) => (a.rank ?? 0) - (b.rank ?? 0),
   );
 
-  return persistRecommendations(sessionId, items);
+  const persisted = await persistRecommendations(sessionId, items);
+  return applyResolvedRatings(persisted);
+}
+
+/**
+ * Override each item's engine seed rating with a resolved rating from the
+ * `ratings` table when one exists (first-party wins). All rating reads go
+ * through the resolver — cards never touch raw rating rows.
+ */
+async function applyResolvedRatings(
+  items: Recommendation[],
+): Promise<Recommendation[]> {
+  const keys = items.map((it) => dishKey(it.dish_name));
+  const resolved = await resolveRatings(keys);
+  return items.map((it) => {
+    const r = resolved.get(dishKey(it.dish_name));
+    return r ? { ...it, rating: r } : it;
+  });
 }
 
 /** Insert recs (with session_id) and merge the new DB ids back onto the items. */
