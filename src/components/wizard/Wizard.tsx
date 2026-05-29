@@ -11,7 +11,6 @@
  */
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { signOut } from "@/lib/auth";
 import {
   normalizeIntent,
   startSession,
@@ -255,7 +254,7 @@ export default function Wizard({ userId }: { userId: string }) {
   // Mode picker (first run / explicit switch).
   if (!activeMode) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-10">
+      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-10 pb-28">
         <header className="mb-8">
           <h1 className="font-display text-4xl lowercase leading-tight text-forest">
             what should you eat?
@@ -272,6 +271,7 @@ export default function Wizard({ userId }: { userId: string }) {
               type="button"
               onClick={() => setActiveMode(m.key)}
               className={`flex items-center gap-4 rounded-3xl ${m.tile} p-6 text-left shadow-soft transition-transform active:scale-[0.98]`}
+
             >
               <span className="text-3xl">{m.emoji}</span>
               <span className="flex flex-col">
@@ -284,13 +284,6 @@ export default function Wizard({ userId }: { userId: string }) {
           ))}
         </div>
 
-        <button
-          type="button"
-          onClick={() => signOut()}
-          className="mt-auto self-center pt-8 text-xs text-forest/40 hover:text-forest/70"
-        >
-          Sign out
-        </button>
       </main>
     );
   }
@@ -299,7 +292,7 @@ export default function Wizard({ userId }: { userId: string }) {
   const ActiveComponent = MODES.find((m) => m.key === activeMode)!.Component;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-6">
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-6 pb-28">
       {/* Persistent mode switcher */}
       <nav className="mb-4 flex items-center justify-center gap-2">
         {MODES.map((m) => (
@@ -331,13 +324,6 @@ export default function Wizard({ userId }: { userId: string }) {
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={() => signOut()}
-        className="mt-6 self-center text-xs text-forest/40 hover:text-forest/70"
-      >
-        Sign out
-      </button>
     </main>
   );
 }

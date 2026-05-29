@@ -21,7 +21,7 @@ import { hasProfile } from "@/lib/auth";
 import Splash from "./Splash";
 import AuthScreen from "./auth/AuthScreen";
 import SetupFlow from "./setup/SetupFlow";
-import Wizard from "./wizard/Wizard";
+import AppShell from "./shell/AppShell";
 
 type Route = "loading" | "auth" | "setup" | "wizard";
 
@@ -85,7 +85,7 @@ export default function AppRouter() {
         />
       );
     case "wizard":
-      return <Wizard userId={session!.user.id} />;
+      return <AppShell userId={session!.user.id} />;
     default:
       return <Splash subtitle="Warming up the kitchen…" />;
   }
