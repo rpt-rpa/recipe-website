@@ -73,3 +73,43 @@ button {
   font-family: inherit;
   cursor: pointer;
 }
+
+/* ── View transitions ───────────────────────────────────────────────────── */
+/* Smooth opacity + slight slide when the tab content swaps. */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+main {
+  animation: fadeSlideIn 0.18s ease-out both;
+}
+
+/* ── iOS safe-area for bottom nav ──────────────────────────────────────── */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/* ── Skeleton pulse ─────────────────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+.animate-pulse {
+  animation: pulse 1.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Smooth tab bar transitions ─────────────────────────────────────────── */
+nav .lime-dot {
+  transition: opacity 0.15s ease;
+}
+
+/* ── No tap highlight on mobile ─────────────────────────────────────────── */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Input font-size >= 16px prevents iOS zoom ──────────────────────────── */
+input, textarea, select {
+  font-size: 16px;
+}

@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   title: "i'm hungry — what should I eat?",
   description:
     "Beat food decision fatigue. i'm hungry learns your context and taste, then surfaces timely, personalized meals to order or cook. Fresh, fast & for you.",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
