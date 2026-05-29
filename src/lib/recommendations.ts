@@ -32,8 +32,79 @@ export interface Recommendation {
 
 const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL ?? "";
 
+interface EngineContext {
+  profile: {
+    allergies: string[];
+    dietary_restrictions: string[];
+    preferred_cuisines: string[];
+    disliked_foods: string[];
+    pantry_staples: string[];
+    budget_range: string | null;
+  };
+  recently_eaten: string[];
+  session_count: number;
+}
+
+/**
+ * Gather the RLS-safe context the stateless engine needs: the user's own
+ * profile (allergies/diet/learned prefs/pantry/budget), recently-eaten dishes
+ * (last 3 days), and session count (drives explore/exploit). Reading these in
+ * the client keeps the n8n workflow free of any Supabase service-role key.
+ */
+async function gatherContext(userId: string): Promise<EngineContext> {
+  const threeDaysAgo = new Date(
+    Date.now() - 3 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  const [profileRes, eatenRes, countRes] = await Promise.all([
+    supabase
+      .from("user_profiles")
+      .select(
+        "allergies, dietary_restrictions, preferred_cuisines, disliked_foods, pantry_staples, budget_range",
+      )
+      .eq("id", userId)
+      .maybeSingle(),
+    supabase
+      .from("feedback")
+      .select("created_at, outcome, recommendations(dish_name)")
+      .eq("outcome", "chose")
+      .gte("created_at", threeDaysAgo),
+    supabase
+      .from("food_sessions")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId),
+  ]);
+
+  const p = profileRes.data;
+  const recently_eaten = (eatenRes.data ?? [])
+    .map((row) => {
+      const rec = (row as { recommendations?: { dish_name?: string } | null })
+        .recommendations;
+      return rec?.dish_name ?? null;
+    })
+    .filter((n): n is string => Boolean(n));
+
+  return {
+    profile: {
+      allergies: p?.allergies ?? [],
+      dietary_restrictions: p?.dietary_restrictions ?? [],
+      preferred_cuisines: p?.preferred_cuisines ?? [],
+      disliked_foods: p?.disliked_foods ?? [],
+      pantry_staples: p?.pantry_staples ?? [],
+      budget_range: p?.budget_range ?? null,
+    },
+    recently_eaten,
+    session_count: countRes.count ?? 0,
+  };
+}
+
 /** Build the payload the n8n workflow expects (any pref may be null). */
-function buildPayload(userId: string, sessionId: string, intent: Intent) {
+function buildPayload(
+  userId: string,
+  sessionId: string,
+  intent: Intent,
+  ctx: EngineContext,
+) {
   const now = new Date();
   return {
     user_id: userId,
@@ -47,6 +118,9 @@ function buildPayload(userId: string, sessionId: string, intent: Intent) {
     format_pref: intent.format_pref,
     day_of_week: now.getDay(),
     hour_of_day: now.getHours(),
+    profile: ctx.profile,
+    recently_eaten: ctx.recently_eaten,
+    session_count: ctx.session_count,
   };
 }
 
@@ -70,10 +144,11 @@ export async function fetchRecommendations(
     );
   }
 
+  const ctx = await gatherContext(userId);
   const res = await fetch(N8N_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(buildPayload(userId, sessionId, intent)),
+    body: JSON.stringify(buildPayload(userId, sessionId, intent, ctx)),
   });
   if (!res.ok) {
     throw new Error(`Recommendation engine returned ${res.status}.`);
