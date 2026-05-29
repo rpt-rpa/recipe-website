@@ -16,11 +16,17 @@ import {
   normalizeIntent,
   startSession,
   type InputMode,
+  type Intent,
   type ModeOutput,
 } from "@/lib/intent";
+import {
+  fetchRecommendations,
+  type Recommendation,
+} from "@/lib/recommendations";
 import ModeText from "@/components/modes/ModeText";
 import ModeSurprise from "@/components/modes/ModeSurprise";
 import ModeThisOrThat from "@/components/modes/ModeThisOrThat";
+import Results from "@/components/results/Results";
 import type { ModeProps } from "@/components/modes/types";
 
 type PickableMode = "text" | "surprise" | "this_or_that";
@@ -64,8 +70,14 @@ export default function Wizard({ userId }: { userId: string }) {
   const [activeMode, setActiveMode] = useState<PickableMode | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Temporary until Task 5 wires the results view.
-  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  // Results phase.
+  const [phase, setPhase] = useState<"pick" | "results">("pick");
+  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [recsError, setRecsError] = useState<string | null>(null);
+  const [lastIntent, setLastIntent] = useState<Intent | null>(null);
+  const [lastSessionId, setLastSessionId] = useState<string | null>(null);
 
   // Open straight into the last-used mode, if any.
   useEffect(() => {
@@ -88,18 +100,48 @@ export default function Wizard({ userId }: { userId: string }) {
     };
   }, [userId]);
 
+  async function loadRecs(sessionId: string, intent: Intent) {
+    setRecsLoading(true);
+    setRecsError(null);
+    try {
+      const items = await fetchRecommendations(userId, sessionId, intent);
+      setRecs(items);
+    } catch (err) {
+      setRecsError(
+        err instanceof Error ? err.message : "Could not load recommendations.",
+      );
+    } finally {
+      setRecsLoading(false);
+    }
+  }
+
   async function handleSubmit(output: ModeOutput) {
     setBusy(true);
     setError(null);
     try {
       const intent = normalizeIntent(output);
       const id = await startSession(userId, intent);
-      setSessionId(id); // Task 5 will fetch + render recommendations here
+      setLastIntent(intent);
+      setLastSessionId(id);
+      setPhase("results");
+      await loadRecs(id, intent);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start session.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function handleSkipAll() {
+    // Log the "skipped all" outcome (full feedback module lands in Task 6).
+    if (lastSessionId) {
+      await supabase
+        .from("feedback")
+        .insert({ session_id: lastSessionId, outcome: "skipped_all" });
+    }
+    setRecs([]);
+    setRecsError(null);
+    setPhase("pick");
   }
 
   if (loadingMode) {
@@ -110,25 +152,17 @@ export default function Wizard({ userId }: { userId: string }) {
     );
   }
 
-  // Temporary results stand-in (replaced in Task 5).
-  if (sessionId) {
+  if (phase === "results") {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center gap-4 px-5 text-center">
-        <h1 className="font-display text-3xl lowercase text-forest">
-          session started 🎉
-        </h1>
-        <p className="text-sm text-forest/60">
-          Recommendations land in Task 5.
-        </p>
-        <p className="text-xs text-forest/40">session: {sessionId}</p>
-        <button
-          type="button"
-          onClick={() => setSessionId(null)}
-          className="mt-4 rounded-full bg-raspberry px-6 py-3 font-semibold text-cream"
-        >
-          Again
-        </button>
-      </main>
+      <Results
+        recommendations={recs}
+        loading={recsLoading}
+        error={recsError}
+        onSkipAll={handleSkipAll}
+        onRetry={() => {
+          if (lastSessionId && lastIntent) loadRecs(lastSessionId, lastIntent);
+        }}
+      />
     );
   }
 
