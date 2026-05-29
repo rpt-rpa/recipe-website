@@ -76,7 +76,14 @@ export default function AppRouter() {
     case "auth":
       return <AuthScreen />;
     case "setup":
-      return <SetupFlow userId={session!.user.id} />;
+      return (
+        <SetupFlow
+          userId={session!.user.id}
+          onComplete={() =>
+            setProfileFor({ userId: session!.user.id, has: true })
+          }
+        />
+      );
     case "wizard":
       return <Wizard userId={session!.user.id} />;
     default:
